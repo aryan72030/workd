@@ -1,0 +1,30 @@
+.a {
+    background-color: black;
+    color: white;
+    padding: 1px;
+    text-decoration: none;
+    margin: 2px;
+}
+
+.su {
+    background-color: seagreen;
+    color: white;
+    padding: 1px;
+    text-decoration: none;
+    margin: 2px;
+}
+
+.re {
+    background-color: red;
+    color: white;
+    padding: 1px;
+    text-decoration: none;
+    margin: 2px;
+}
+
+.cont {
+    margin: 10px;
+}
+
+
+/* https: //github.com/aryan72030 */
