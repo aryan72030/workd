@@ -60,8 +60,17 @@ class RoleController extends Controller
     }
     function delete($id)
     {
-        $delete = Role::find($id);
-        $delete->delete();
+     $role = Role::findOrFail($id);
+        $emp=Employ::where('role',$role->name)->first();
+        if($emp){
+                    return redirect()->back()->with(
+            'error',
+            'This role is assigned to employees and cannot be deleted.'
+        );
+        }
+           $role->permissions()->detach();
+    $role->delete();
+        
         return redirect()->back();
     }
 }

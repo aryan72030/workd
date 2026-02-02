@@ -1,5 +1,9 @@
 @extends('masterpage.layout')
-
+@if(session('error'))
+<script>
+    alert("{{ session('error') }}");
+</script>
+@endif
 @section('title')
     {{ __('Employess') }}
 @endsection

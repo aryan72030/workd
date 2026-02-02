@@ -21,9 +21,13 @@ Route::middleware('auth:web,employ')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+   Route::middleware(['auth', 'permission:create_employee'])->group(function () {
     Route::get('/create', [UserController::class, 'create']);
     Route::post('/addemp', [UserController::class, 'addemp']);
+});
+    Route::middleware(['auth', 'permission:view_employee'])->group(function () {
     Route::get('/employes', [UserController::class, 'employes']);
+});
     Route::get('/edit/{id}', [UserController::class, 'edit']);
     Route::post('/edit_success', [UserController::class, 'edit_success']);
     Route::get('/delete/{id}', [UserController::class, 'delete']);
