@@ -1,3 +1,20 @@
+use App\Models\Role;
+use App\Models\Permission;
+
+public function run()
+{
+    $admin = Role::where('name', 'admin')->first();
+
+    if ($admin) {
+        $admin->syncPermissions(Permission::all());
+    }
+}
+
+
+
+
+
+
 
 class User extends Authenticatable
 {
