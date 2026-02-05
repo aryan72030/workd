@@ -1,3 +1,10 @@
+
+$user = User::find(1);
+
+// admin role remove
+$user->roles()->detach(1);
+
+
 use App\Models\Role;
 use App\Models\Permission;
 
