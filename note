@@ -1,87 +1,155 @@
+<?php
 
-$user = User::find(1);
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
-// admin role remove
-$user->roles()->detach(1);
-
-
-use App\Models\Role;
-use App\Models\Permission;
-
-public function run()
+return new class extends Migration
 {
-    $admin = Role::where('name', 'admin')->first();
-
-    if ($admin) {
-        $admin->syncPermissions(Permission::all());
-    }
-}
-
-
-
-
-
-
-
-class User extends Authenticatable
-{
-    public function employee()
+    public function up(): void
     {
-        return $this->hasOne(Employee::class);
+        Schema::create('staff_availability', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('employ_id');
+            $table->json('availability');
+            $table->timestamps();
+            $table->foreign('employ_id')->references('id')->on('employs')->onDelete('cascade');
+        });
     }
-}
 
-
-
-
-use Illuminate\Foundation\Auth\User as Authenticatable;
-
-class Employee extends Authenticatable
-{
-    protected $hidden = ['password'];
-
-    public function user()
+    public function down(): void
     {
-        return $this->belongsTo(User::class);
+        Schema::dropIfExists('staff_availability');
     }
-}
+};
 
 
 
 
-AuthenticatedSessionController.php
 
-use App\Models\User;
-use App\Models\Employee;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
+<?php
 
-public function store(Request $request)
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class StaffAvailability extends Model
 {
-    $request->validate([
-        'email' => ['required', 'email'],
-        'password' => ['required'],
-    ]);
+    protected $table = 'staff_availability';
+    protected $fillable = ['employ_id', 'availability'];
+    protected $casts = ['availability' => 'array'];
 
-    // 1️⃣ Try USERS table first
-    $user = User::where('email', $request->email)->first();
-
-    if ($user && $user->password && Hash::check($request->password, $user->password)) {
-        Auth::login($user);
-        return redirect()->intended('/dashboard');
+    public function employ()
+    {
+        return $this->belongsTo(Employ::class);
     }
-
-    // 2️⃣ Try EMPLOYEES table
-    $employee = Employee::where('email', $request->email)->first();
-
-    if ($employee && Hash::check($request->password, $employee->password)) {
-        Auth::login($employee->user); // login USER
-        return redirect()->intended('/dashboard');
-    }
-
-    // 3️⃣ Fail
-    return back()->withErrors([
-        'email' => 'Invalid email or password',
-    ]);
 }
+
+
+
+
+3. Update Employ Model
+Add to app/Models/Employ.php:
+
+public function availability()
+{
+    return $this->hasOne(StaffAvailability::class);
+}
+
+
+
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use App\Models\StaffAvailability;
+use App\Models\Employ;
+
+class AvailabilityController extends Controller
+{
+    function index($employId)
+    {
+        $employ = Employ::findOrFail($employId);
+        $availability = StaffAvailability::where('employ_id', $employId)->first();
+        return view('availability.index', compact('employ', 'availability'));
+    }
+
+    function store(Request $req)
+    {
+        StaffAvailability::updateOrCreate(
+            ['employ_id' => $req->employ_id],
+            ['availability' => $req->availability]
+        );
+        return redirect()->back()->with('success', 'Availability updated successfully');
+    }
+
+    function checkAvailable($employId, $day, $time)
+    {
+        $availability = StaffAvailability::where('employ_id', $employId)->first();
+        
+        if (!$availability || !$availability->availability[$day]['available']) {
+            return response()->json(['available' => false]);
+        }
+
+        foreach ($availability->availability[$day]['slots'] as $slot) {
+            if ($time >= $slot['start'] && $time <= $slot['end']) {
+                return response()->json(['available' => true]);
+            }
+        }
+
+        return response()->json(['available' => false]);
+    }
+}
+
+
+
+
+
+@extends('masterpage.layout')
+
+@section('title', 'Staff Availability')
+
+@section('mainConten')
+<div class="dash-container">
+    <div class="dash-content">
+        <div class="page-header">
+            <h4>Manage Availability - {{ $employ->name }}</h4>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="{{ url('availability/store') }}">
+                    @csrf
+                    <input type="hidden" name="employ_id" value="{{ $employ->id }}">
+                    
+                    @foreach(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day)
+                    <div class="mb-3">
+                        <h6>{{ ucfirst($day) }}</h6>
+                        <input type="checkbox" name="availability[{{ $day }}][available]" value="1" 
+                            {{ $availability && $availability->availability[$day]['available'] ?? false ? 'checked' : '' }}>
+                        <label>Available</label>
+                        
+                        <div class="row mt-2">
+                            <div class="col-md-3">
+                                <input type="time" class="form-control" 
+                                    name="availability[{{ $day }}][slots][0][start]" 
+                                    value="{{ $availability->availability[$day]['slots'][0]['start'] ?? '09:00' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <input type="time" class="form-control" 
+                                    name="availability[{{ $day }}][slots][0][end]" 
+                                    value="{{ $availability->availability[$day]['slots'][0]['end'] ?? '17:00' }}">
+                            </div>
+                        </div>
+                    </div>
+                    @endforeach
+
+                    <button type="submit" class="btn btn-primary">Save Availability</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+@endsection
 
