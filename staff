@@ -1,0 +1,83 @@
+    public function store(Request $request)
+    {
+        $availability = [];
+        foreach ($request->days ?? [] as $day) {
+            $availability[$day] = [
+                'start_time' => $request->input("start_time.$day"),
+                'end_time' => $request->input("end_time.$day")
+            ];
+        }
+
+        Staff::updateOrCreate(
+            ['user_id' => Auth::id()],
+            ['availability' => $availability]
+        );
+        
+        return redirect()->back()->with('success', 'Availability updated successfully');
+    }
+
+
+        public function index()
+    {
+        $availability = Staff::where('user_id', Auth::id())->first();
+        return view('staff.staff_availability', compact('availability'));
+    }
+
+
+
+    @extends('masterpage.layout')
+
+@section('title', 'Staff Availability')
+
+@section('mainConten')
+<div class="dash-container">
+    <div class="dash-content">
+        <div class="page-header">
+            <h4>Manage Availability</h4>
+        </div>
+
+        @if(session('success'))
+            <div class="alert alert-success">{{ session('success') }}</div>
+        @endif
+
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="{{ route('staff.store') }}">
+                    @csrf
+                    
+                    @foreach(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day)
+                    @php
+                        $dayData = $availability->availability[$day] ?? null;
+                        $isAvailable = !empty($dayData);
+                    @endphp
+                    <div class="mb-3">
+                        <h6>{{ ucfirst($day) }}</h6>
+                        <input type="checkbox" name="days[]" value="{{ $day }}" 
+                            {{ $isAvailable ? 'checked' : '' }} 
+                            onchange="this.closest('.mb-3').querySelectorAll('input[type=time]').forEach(i => i.disabled = !this.checked)">
+                        <label>Available</label>
+                        
+                        <div class="row mt-2">
+                            <div class="col-md-3">
+                                <input type="time" class="form-control" 
+                                    name="start_time[{{ $day }}]" 
+                                    value="{{ $dayData['start_time'] ?? '' }}"
+                                    {{ !$isAvailable ? 'disabled' : '' }}>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="time" class="form-control" 
+                                    name="end_time[{{ $day }}]" 
+                                    value="{{ $dayData['end_time'] ?? '' }}"
+                                    {{ !$isAvailable ? 'disabled' : '' }}>
+                            </div>
+                        </div>
+                    </div>
+                    @endforeach
+
+                    <button type="submit" class="btn btn-primary">Save Availability</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+@endsection
