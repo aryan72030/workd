@@ -1,111 +1,3 @@
-<?php
-
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
-
-return new class extends Migration
-{
-    public function up(): void
-    {
-        Schema::create('staff_availability', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('employ_id');
-            $table->json('availability');
-            $table->timestamps();
-            $table->foreign('employ_id')->references('id')->on('employs')->onDelete('cascade');
-        });
-    }
-
-    public function down(): void
-    {
-        Schema::dropIfExists('staff_availability');
-    }
-};
-
-
-
-
-
-<?php
-
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Model;
-
-class StaffAvailability extends Model
-{
-    protected $table = 'staff_availability';
-    protected $fillable = ['employ_id', 'availability'];
-    protected $casts = ['availability' => 'array'];
-
-    public function employ()
-    {
-        return $this->belongsTo(Employ::class);
-    }
-}
-
-
-
-
-3. Update Employ Model
-Add to app/Models/Employ.php:
-
-public function availability()
-{
-    return $this->hasOne(StaffAvailability::class);
-}
-
-
-
-<?php
-
-namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
-use App\Models\StaffAvailability;
-use App\Models\Employ;
-
-class AvailabilityController extends Controller
-{
-    function index($employId)
-    {
-        $employ = Employ::findOrFail($employId);
-        $availability = StaffAvailability::where('employ_id', $employId)->first();
-        return view('availability.index', compact('employ', 'availability'));
-    }
-
-    function store(Request $req)
-    {
-        StaffAvailability::updateOrCreate(
-            ['employ_id' => $req->employ_id],
-            ['availability' => $req->availability]
-        );
-        return redirect()->back()->with('success', 'Availability updated successfully');
-    }
-
-    function checkAvailable($employId, $day, $time)
-    {
-        $availability = StaffAvailability::where('employ_id', $employId)->first();
-        
-        if (!$availability || !$availability->availability[$day]['available']) {
-            return response()->json(['available' => false]);
-        }
-
-        foreach ($availability->availability[$day]['slots'] as $slot) {
-            if ($time >= $slot['start'] && $time <= $slot['end']) {
-                return response()->json(['available' => true]);
-            }
-        }
-
-        return response()->json(['available' => false]);
-    }
-}
-
-
-
-
-
 @extends('masterpage.layout')
 
 @section('title', 'Staff Availability')
@@ -114,32 +6,32 @@ class AvailabilityController extends Controller
 <div class="dash-container">
     <div class="dash-content">
         <div class="page-header">
-            <h4>Manage Availability - {{ $employ->name }}</h4>
+            <h4>Manage Availability</h4>
         </div>
 
+  
         <div class="card">
             <div class="card-body">
-                <form method="POST" action="{{ url('availability/store') }}">
+                <form method="POST" action="{{ route('staff.store') }}">
                     @csrf
-                    <input type="hidden" name="employ_id" value="{{ $employ->id }}">
                     
                     @foreach(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day)
                     <div class="mb-3">
                         <h6>{{ ucfirst($day) }}</h6>
                         <input type="checkbox" name="availability[{{ $day }}][available]" value="1" 
-                            {{ $availability && $availability->availability[$day]['available'] ?? false ? 'checked' : '' }}>
+                            {{ $availability && isset($availability->availability[$day]['available']) && $availability->availability[$day]['available'] ? 'checked' : '' }}>
                         <label>Available</label>
                         
                         <div class="row mt-2">
                             <div class="col-md-3">
                                 <input type="time" class="form-control" 
-                                    name="availability[{{ $day }}][slots][0][start]" 
-                                    value="{{ $availability->availability[$day]['slots'][0]['start'] ?? '09:00' }}">
+                                    name="availability[{{ $day }}][start_time]" 
+                                    value="{{ $availability->availability[$day]['start_time'] ?? '' }}">
                             </div>
                             <div class="col-md-3">
                                 <input type="time" class="form-control" 
-                                    name="availability[{{ $day }}][slots][0][end]" 
-                                    value="{{ $availability->availability[$day]['slots'][0]['end'] ?? '17:00' }}">
+                                    name="availability[{{ $day }}][end_time]" 
+                                    value="{{ $availability->availability[$day]['end_time'] ?? '' }}">
                             </div>
                         </div>
                     </div>
@@ -153,3 +45,68 @@ class AvailabilityController extends Controller
 </div>
 @endsection
 
+
+
+
+
+    public function index()
+    {
+        $availability = Staff::where('user_id', Auth::id())->first();
+        return view('staff.staff_availability', compact('availability'));
+    }
+
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'availability' => 'required|array',
+        ]);
+
+        $availability = [];
+        foreach ($request->availability as $day => $data) {
+            $availability[$day] = [
+                'available' => isset($data['available']),
+                'start_time' => $data['start_time'] ?? null,
+                'end_time' => $data['end_time'] ?? null,
+            ];
+        }
+
+        Staff::updateOrCreate(
+            ['user_id' => Auth::id()],
+            ['availability' => $availability]
+        );
+
+        return redirect()->back()->with('success', 'Availability updated successfully');
+    }
+
+
+
+
+@if (session('success') || session('error'))
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
+    <div id="liveToast"
+        class="toast align-items-center text-white 
+        {{ session('success') ? 'bg-success' : 'bg-danger' }} 
+        border-0 show"
+        role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body">
+                {{ session('success') ?? session('error') }}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        let toastEl = document.getElementById('liveToast');
+        if (toastEl) {
+            let toast = new bootstrap.Toast(toastEl, {
+                delay: 3000 
+            });
+            toast.show();
+        }
+    });
+</script>
+@endif
