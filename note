@@ -1,3 +1,24 @@
+<td>
+                                <form method="POST" action="{{ route('appointment.update', $appointment->id) }}" style="display:inline;">
+                                    @csrf
+                                    @method('PUT')
+                                    <input type="hidden" name="service_id" value="{{ $appointment->service_id }}">
+                                    <input type="hidden" name="staff_id" value="{{ $appointment->staff_id }}">
+                                    <input type="hidden" name="appointment_date" value="{{ $appointment->appointment_date }}">
+                                    <input type="hidden" name="start_time" value="{{ $appointment->start_time }}">
+                                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()" style="width:auto;display:inline;">
+                                        <option value="pending" {{ $appointment->status == 'pending' ? 'selected' : '' }}>Pending</option>
+                                        <option value="confirmed" {{ $appointment->status == 'confirmed' ? 'selected' : '' }}>Confirmed</option>
+                                        <option value="cancelled" {{ $appointment->status == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                                        <option value="completed" {{ $appointment->status == 'completed' ? 'selected' : '' }}>Completed</option>
+                                    </select>
+                                </form>
+                            </td>
+
+
+
+
+
 @extends('masterpage.layout')
 
 @section('title', 'Staff Availability')
