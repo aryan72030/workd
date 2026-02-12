@@ -1,22 +1,454 @@
 <?php
-interface pr1{
-    function calc($a,$b);
-}
-interface pr2{
-    function sub($c,$d);
-}
-class chid implements pr1,pr2{
-    function calc($a, $b)
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Appointment extends Model
+{
+    protected $fillable = ['user_id', 'staff_id', 'service_id', 'appointment_date', 'start_time', 'status', 'notes'];
+
+    protected $casts = ['appointment_date' => 'datetime'];
+
+    public function user()
     {
-        echo $a+$b."<br>";
+        return $this->belongsTo(User::class);
     }
-    function sub($c, $d)
+
+    public function staff()
     {
-        echo $c-$d;
+        return $this->belongsTo(User::class, 'staff_id');
+    }
+
+    public function service()
+    {
+        return $this->belongsTo(Service::class);
     }
 }
 
-$obj=new chid();
-$obj->calc(10,20);
-$obj->sub(4,10);
-?>
+
+
+
+
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('appointments', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->foreignId('staff_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('service_id')->constrained()->onDelete('cascade');
+            $table->dateTime('appointment_date');
+            $table->enum('status', ['pending', 'confirmed', 'completed', 'cancelled'])->default('pending');
+            $table->text('notes')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('appointments');
+    }
+};
+
+
+
+
+
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Appointment;
+use App\Models\Service;
+use App\Models\User;
+use Illuminate\Http\Request;
+
+class AppointmentController extends Controller
+{
+    public function index()
+    {
+        $appointments = Appointment::with(['user', 'staff', 'service'])->latest()->paginate(10);
+        return view('appointments.index', compact('appointments'));
+    }
+
+    public function create()
+    {
+        $services = Service::where('status', 'active')->get();
+        $staff = User::whereHas('roles', fn($q) => $q->where('name', 'staff'))
+            ->whereHas('availability')
+            ->with('availability')
+            ->get();
+        return view('appointments.create', compact('services', 'staff'));
+    }
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'staff_id' => 'required|exists:users,id',
+            'service_id' => 'required|exists:services,id',
+            'appointment_date' => 'required|date|after:now',
+            'start_time' => 'required',
+            'notes' => 'nullable|string'
+        ]);
+
+        $validated['user_id'] = auth()->id();
+        Appointment::create($validated);
+
+        return redirect()->route('appointments.index')->with('success', 'Appointment created successfully');
+    }
+
+    public function edit(Appointment $appointment)
+    {
+        $services = Service::where('status', 'active')->get();
+        $staff = User::whereHas('roles', fn($q) => $q->where('name', 'staff'))
+            ->whereHas('availability')
+            ->with('availability')
+            ->get();
+        return view('appointments.edit', compact('appointment', 'services', 'staff'));
+    }
+
+    public function update(Request $request, Appointment $appointment)
+    {
+        $validated = $request->validate([
+            'staff_id' => 'required|exists:users,id',
+            'service_id' => 'required|exists:services,id',
+            'appointment_date' => 'required|date',
+            'start_time' => 'required',
+            'status' => 'required|in:pending,confirmed,completed,cancelled',
+            'notes' => 'nullable|string'
+        ]);
+
+        $appointment->update($validated);
+        return redirect()->route('appointments.index')->with('success', 'Appointment updated successfully');
+    }
+
+    public function destroy(Appointment $appointment)
+    {
+        $appointment->delete();
+        return redirect()->route('appointments.index')->with('success', 'Appointment deleted successfully');
+    }
+}
+
+
+
+
+
+
+
+@extends('masterpage.layout')
+
+@section('title', 'Create Appointment')
+
+@section('mainConten')
+<section class="dash-container">
+    <div class="dash-content">
+        <div class="page-header">
+            <div class="page-block">
+                <div class="row align-items-center">
+                    <div class="col-md-12">
+                        <div class="page-header-title">
+                            <h4 class="m-b-10">{{ __('Create Appointment') }}</h4>
+                        </div>
+                        <ul class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">{{ __('Home') }}</a></li>
+                            <li class="breadcrumb-item"><a href="{{ route('appointments.index') }}">{{ __('Appointments') }}</a></li>
+                            <li class="breadcrumb-item">{{ __('Create') }}</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-xl-12">
+                <div class="card">
+                    <div class="card-body">
+                        <form action="{{ route('appointments.store') }}" method="POST">
+                            @csrf
+                            <div class="form-group">
+                                <label class="form-label">{{ __('Service') }}</label>
+                                <select name="service_id" class="form-control" required>
+                                    <option value="">{{ __('Select Service') }}</option>
+                                    @foreach($services as $service)
+                                    <option value="{{ $service->id }}">{{ $service->name }} - ${{ $service->price }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">{{ __('Appointment Date') }}</label>
+                                <input type="date" name="appointment_date" id="appointment_date" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">{{ __('Staff') }}</label>
+                                <select name="staff_id" id="staff_id" class="form-control" required>
+                                    <option value="">{{ __('Select Date First') }}</option>
+                                </select>
+                                <small class="text-muted" id="availability-info"></small>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">{{ __('Start Time') }}</label>
+                                <input type="time" name="start_time" id="start_time" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">{{ __('Notes') }}</label>
+                                <textarea name="notes" class="form-control" rows="3"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">{{ __('Create') }}</button>
+                            <a href="{{ route('appointments.index') }}" class="btn btn-light">{{ __('Cancel') }}</a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+<script>
+const staff = @json($staff);
+
+document.getElementById('appointment_date').addEventListener('change', function() {
+    const date = new Date(this.value + 'T00:00:00');
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const day = days[date.getDay()];
+    
+    const select = document.getElementById('staff_id');
+    const info = document.getElementById('availability-info');
+    
+    select.innerHTML = '<option value="">Select Staff</option>';
+    info.textContent = '';
+    
+    staff.forEach(s => {
+        const avail = s.availability?.availability?.[day];
+        if(avail) {
+            const opt = new Option(s.name + ' (' + avail.start + ' - ' + avail.end + ')', s.id);
+            opt.dataset.start = avail.start;
+            opt.dataset.end = avail.end;
+            select.add(opt);
+        }
+    });
+    
+    if(select.options.length === 1) {
+        info.textContent = 'No staff available on ' + day;
+    }
+});
+
+document.getElementById('staff_id').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    const info = document.getElementById('availability-info');
+    if(opt.dataset.start) {
+        info.textContent = 'Available: ' + opt.dataset.start + ' - ' + opt.dataset.end;
+    }
+});
+</script>
+@endsection
+
+
+--update--
+
+@extends('masterpage.layout')
+
+@section('title', 'Edit Appointment')
+
+@section('mainConten')
+<section class="dash-container">
+    <div class="dash-content">
+        <div class="page-header">
+            <div class="page-block">
+                <div class="row align-items-center">
+                    <div class="col-md-12">
+                        <div class="page-header-title">
+                            <h4 class="m-b-10">{{ __('Edit Appointment') }}</h4>
+                        </div>
+                        <ul class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">{{ __('Home') }}</a></li>
+                            <li class="breadcrumb-item"><a href="{{ route('appointments.index') }}">{{ __('Appointments') }}</a></li>
+                            <li class="breadcrumb-item">{{ __('Edit') }}</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-xl-12">
+                <div class="card">
+                    <div class="card-body">
+                        <form action="{{ route('appointments.update', $appointment->id) }}" method="POST">
+                            @csrf
+                            @method('PUT')
+                            <div class="form-group">
+                                <label class="form-label">{{ __('Service') }}</label>
+                                <select name="service_id" class="form-control" required>
+                                    @foreach($services as $service)
+                                    <option value="{{ $service->id }}" {{ $appointment->service_id == $service->id ? 'selected' : '' }}>{{ $service->name }} - ${{ $service->price }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">{{ __('Appointment Date') }}</label>
+                                <input type="date" name="appointment_date" id="appointment_date" class="form-control" value="{{ $appointment->appointment_date->format('Y-m-d') }}" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">{{ __('Staff') }}</label>
+                                <select name="staff_id" id="staff_id" class="form-control" required>
+                                    <option value="">{{ __('Select Staff') }}</option>
+                                    @foreach($staff as $member)
+                                    <option value="{{ $member->id }}" {{ $appointment->staff_id == $member->id ? 'selected' : '' }} data-availability='@json($member->availability->availability ?? [])'>{{ $member->name }}</option>
+                                    @endforeach
+                                </select>
+                                <small class="text-muted" id="availability-info"></small>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">{{ __('Start Time') }}</label>
+                                <input type="time" name="start_time" id="start_time" class="form-control" value="{{ $appointment->start_time }}" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">{{ __('Status') }}</label>
+                                <select name="status" class="form-control" required>
+                                    <option value="pending" {{ $appointment->status == 'pending' ? 'selected' : '' }}>Pending</option>
+                                    <option value="confirmed" {{ $appointment->status == 'confirmed' ? 'selected' : '' }}>Confirmed</option>
+                                    <option value="completed" {{ $appointment->status == 'completed' ? 'selected' : '' }}>Completed</option>
+                                    <option value="cancelled" {{ $appointment->status == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">{{ __('Notes') }}</label>
+                                <textarea name="notes" class="form-control" rows="3">{{ $appointment->notes }}</textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">{{ __('Update') }}</button>
+                            <a href="{{ route('appointments.index') }}" class="btn btn-light">{{ __('Cancel') }}</a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+<script>
+const staff = @json($staff);
+const currentStaffId = {{ $appointment->staff_id }};
+
+function updateStaff() {
+    const date = new Date(document.getElementById('appointment_date').value + 'T00:00:00');
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const day = days[date.getDay()];
+    
+    const select = document.getElementById('staff_id');
+    const info = document.getElementById('availability-info');
+    
+    select.innerHTML = '<option value="">Select Staff</option>';
+    info.textContent = '';
+    
+    staff.forEach(s => {
+        const avail = s.availability?.availability?.[day];
+        if(avail) {
+            const opt = new Option(s.name + ' (' + avail.start + ' - ' + avail.end + ')', s.id);
+            opt.dataset.start = avail.start;
+            opt.dataset.end = avail.end;
+            if(s.id === currentStaffId) opt.selected = true;
+            select.add(opt);
+        }
+    });
+    
+    if(select.options.length === 1) {
+        info.textContent = 'No staff available';
+    }
+}
+
+updateStaff();
+
+document.getElementById('appointment_date').addEventListener('change', updateStaff);
+
+document.getElementById('staff_id').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    const info = document.getElementById('availability-info');
+    if(opt.dataset.start) {
+        info.textContent = 'Available: ' + opt.dataset.start + ' - ' + opt.dataset.end;
+    }
+});
+</script>
+@endsection
+
+
+
+
+@extends('masterpage.layout')
+
+@section('title', 'Appointments')
+
+@section('mainConten')
+<section class="dash-container">
+    <div class="dash-content">
+        <div class="page-header">
+            <div class="page-block">
+                <div class="row align-items-center">
+                    <div class="col-md-12">
+                        <div class="page-header-title">
+                            <h4 class="m-b-10">{{ __('Appointments') }}</h4>
+                        </div>
+                        <ul class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">{{ __('Home') }}</a></li>
+                            <li class="breadcrumb-item">{{ __('Appointments') }}</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-xl-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>{{ __('Appointments List') }}</h5>
+                        <a href="{{ route('appointments.create') }}" class="btn btn-primary">{{ __('Add Appointment') }}</a>
+                    </div>
+                    <div class="card-body table-border-style">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>{{ __('Client') }}</th>
+                                        <th>{{ __('Staff') }}</th>
+                                        <th>{{ __('Service') }}</th>
+                                        <th>{{ __('Date') }}</th>
+                                        <th>{{ __('Start Time') }}</th>
+                                        <th>{{ __('Status') }}</th>
+                                        <th>{{ __('Action') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($appointments as $appointment)
+                                    <tr>
+                                        <td>{{ $appointment->user->name }}</td>
+                                        <td>{{ $appointment->staff->name }}</td>
+                                        <td>{{ $appointment->service->name }}</td>
+                                        <td>{{ $appointment->appointment_date->format('Y-m-d') }}</td>
+                                        <td>{{ $appointment->start_time }}</td>
+                                        <td><span class="badge bg-{{ $appointment->status == 'confirmed' ? 'success' : ($appointment->status == 'cancelled' ? 'danger' : 'warning') }}">{{ $appointment->status }}</span></td>
+                                        <td>
+                                            <a href="{{ route('appointments.edit', $appointment->id) }}" class="btn btn-gradient-info">{{ __('Edit') }}</a>
+                                            <form action="{{ route('appointments.destroy', $appointment->id) }}" method="post" style="display:inline">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button class="btn btn-gradient-danger">{{ __('Delete') }}</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                        {{ $appointments->links() }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+@endsection
