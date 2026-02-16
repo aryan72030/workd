@@ -1,0 +1,163 @@
+    @if(isset($customers))
+    <div class="form-group row">
+        <label class="col-lg-4 col-form-label text-lg-end">{{ __('Select Customer') }}</label>
+        <div class="col-lg-6">
+            <select class="form-control" name="customer_id" required>
+                <option value="">Select Customer</option>
+                @foreach ($customers as $customer)
+                    <option value="{{ $customer->id }}">{{ $customer->name }}</option>
+                @endforeach
+            </select>
+        </div>
+    </div>
+    @endif
+
+
+
+
+
+        <?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Appointment;
+use App\Models\Service;
+use App\Models\StaffAvailability;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class AppointmentController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     */
+    public function index()
+    {
+        if (!Auth::user()->isAbleTo('manage-appointment')) {
+            abort(403, 'Unauthorized');
+        }
+
+        $query = Appointment::with('staff.availability');
+        
+        if (Auth::user()->hasRole('coustmer')) {
+            $query->where('customer_id', Auth::id());
+        }
+        
+        $appointments = $query->get();
+
+        return view('appointment.index', compact('appointments'));
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     */
+    public function create()
+    {
+        if (!Auth::user()->isAbleTo('create-appointment')) {
+            abort(403, 'Unauthorized');
+        }
+
+        $staff = User::whereHasRole('staff')
+            ->whereHas('availability')
+            ->with('availability')
+            ->get();
+
+        $service = Service::get();
+        $customers = Auth::user()->hasRole('admin') ? User::whereHasRole('coustmer')->get() : null;
+        return view('appointment.create', compact('service', 'staff', 'customers'));
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(Request $request)
+    {
+        if (!Auth::user()->isAbleTo('create-appointment')) {
+            abort(403, 'Unauthorized');
+        }
+        $request->validate([
+            'service' => 'required',
+            'appointment_date' => 'required|date',
+            'start_time' => 'required',
+
+        ]);
+
+
+        $arr = [
+            'service' => $request->service,
+            'appointment_date' => $request->appointment_date,
+            'start_time' => $request->start_time,
+            'staff_id' => $request->staff_id,
+            'customer_id' => Auth::user()->hasRole('admin') && $request->customer_id ? $request->customer_id : Auth::id(),
+        ];
+        Appointment::create($arr);
+        return redirect()->route('appointment.index');
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show(string $id)
+    {
+        //
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     */
+    public function edit(string $id)
+    {
+        if (!Auth::user()->isAbleTo('edit-appointment')) {
+            abort(403, 'Unauthorized');
+        }
+        $staff = User::whereHasRole('staff')
+            ->whereHas('availability')
+            ->with('availability')
+            ->get();
+        $service = Service::get();
+        $appointment = Appointment::where('id', $id)->first();
+        return view('appointment.edit', compact('service', 'appointment', 'staff'));
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Request $request, string $id)
+    {
+        if (!Auth::user()->isAbleTo('edit-appointment')) {
+            abort(403, 'Unauthorized');
+        }
+
+        if ($request->status) {
+            if (!Auth::user()->hasRole('admin')) {
+                abort(403, 'Only admins can change appointment status');
+            }
+            Appointment::where('id', $id)->update(['status' => $request->status]);
+        } else {
+
+            $arr = [
+                'service' => $request->service,
+                'appointment_date' => $request->appointment_date,
+                'start_time' => $request->start_time,
+                'staff_id' => $request->staff_id,
+            ];
+
+            Appointment::where('id', $id)->update($arr);
+        }
+
+        return redirect()->route('appointment.index');
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(string $id)
+    {
+        if (!Auth::user()->isAbleTo('delete-appointment')) {
+            abort(403, 'Unauthorized');
+        }
+        Appointment::where('id', $id)->delete();
+        return redirect()->route('appointment.index');
+    }
+}
