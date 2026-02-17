@@ -166,3 +166,65 @@ class MailConfigServiceProvider extends ServiceProvider
     }
 }
 
+
+
+
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\EmailSetting;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Config;
+
+class EmailSettingController extends Controller
+{
+    public function index()
+    {
+        $settings = EmailSetting::first();
+        return view('email_settings.index', compact('settings'));
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'mail_mailer' => 'required',
+            'mail_host' => 'required',
+            'mail_port' => 'required',
+            'mail_username' => 'required',
+            'mail_password' => 'required',
+            'mail_encryption' => 'nullable|in:tls,ssl',
+        ]);
+
+        $settings = EmailSetting::first();
+        $data = $request->only(['mail_mailer','mail_host','mail_port','mail_username','mail_password','mail_encryption']);
+        $data['admin_id'] = auth()->id();
+
+        if ($settings) {
+            $settings->update($data);
+        } else {
+            EmailSetting::create($data);
+        }
+
+        $this->setMailConfig();
+
+        return redirect()->back()->with('success', 'Email settings saved successfully');
+    }
+
+    private function setMailConfig()
+    {
+        $settings = EmailSetting::first();
+        
+        if ($settings) {
+            Config::set('mail.default', $settings->mail_mailer);
+            Config::set('mail.mailers.smtp.host', $settings->mail_host);
+            Config::set('mail.mailers.smtp.port', $settings->mail_port);
+            Config::set('mail.mailers.smtp.username', $settings->mail_username);
+            Config::set('mail.mailers.smtp.password', $settings->mail_password);
+            $scheme = ($settings->mail_encryption === 'ssl') ? 'smtps' : 'smtp';
+            Config::set('mail.mailers.smtp.scheme', $scheme);
+        }
+    }
+}
+
