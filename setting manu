@@ -1,0 +1,66 @@
+@extends('masterpage.layout')
+@section('title', 'Settings')
+
+@section('mainConten')
+<div class="dash-container">
+    <div class="dash-content">
+        <div class="page-header">
+            <div class="page-block">
+                <div class="row align-items-center">
+                    <div class="col-md-12">
+                        <div class="page-header-title">
+                            <h4 class="m-b-10">{{ __('Settings') }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-xl-3">
+                <div class="card sticky-top" style="top: 20px;">
+                    <div class="list-group list-group-flush" id="settings-nav">
+                        <a class="list-group-item list-group-item-action" href="#email-settings">{{ __('Email Settings') }}</a>
+                        <a class="list-group-item list-group-item-action" href="#file-settings">{{ __('File Settings') }}</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-xl-9">
+                <div id="email-settings" class="card mb-4">
+                    <div class="card-header">
+                        <h5>{{ __('Email Settings') }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="">
+                            @csrf
+       
+                            <div class="text-end">
+                                <button type="submit" class="btn btn-primary">{{ __('Save Settings') }}</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="file-settings" class="card mb-4">
+                    <div class="card-header">
+                        <h5>{{ __('File Settings') }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>{{ __('File settings configuration will be here.') }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const scrollSpy = new bootstrap.ScrollSpy(document.body, {
+        target: '#settings-nav',
+        offset: 100
+    });
+});
+</script>
+@endsection
